@@ -7,7 +7,7 @@ export type Toast = {
   duration?: number
 }
 
-type ActiveView = 'code' | 'scheduled' | 'tasks' | 'terminal' | 'history' | 'settings'
+type ActiveView = 'code' | 'scheduled' | 'terminal' | 'history' | 'settings'
 
 type UIStore = {
   theme: 'light' | 'dark'

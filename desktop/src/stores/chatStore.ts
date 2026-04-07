@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { wsManager } from '../api/websocket'
 import { sessionsApi } from '../api/sessions'
 import { useTeamStore } from './teamStore'
+import { useCLITaskStore } from './cliTaskStore'
 import type { MessageEntry } from '../types/session'
 import type { PermissionMode } from '../types/settings'
 import type { AttachmentRef, ChatState, UIAttachment, UIMessage, ServerMessage, TokenUsage } from '../types/chat'
@@ -40,6 +41,11 @@ type ChatStore = {
   clearMessages: () => void
   handleServerMessage: (msg: ServerMessage) => void
 }
+
+const TASK_TOOL_NAMES = new Set(['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'])
+
+/** Track tool_use IDs for task-related tools, so we can refresh on tool_result */
+const pendingTaskToolUseIds = new Set<string>()
 
 let msgCounter = 0
 const nextId = () => `msg-${++msgCounter}-${Date.now()}`
@@ -94,8 +100,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       get().handleServerMessage(msg)
     })
 
-    // Load history
+    // Load history and tasks
     get().loadHistory(sessionId)
+    useCLITaskStore.getState().fetchSessionTasks(sessionId)
     sessionsApi.getSlashCommands(sessionId)
       .then(({ commands }) => {
         if (get().connectedSessionId === sessionId) {
@@ -112,6 +119,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   disconnectSession: () => {
     wsManager.disconnect()
     if (elapsedTimer) clearInterval(elapsedTimer)
+    useCLITaskStore.getState().clearTasks()
     set({ connectedSessionId: null, chatState: 'idle' })
   },
 
@@ -262,12 +270,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         })
         break
 
-      case 'tool_use_complete':
+      case 'tool_use_complete': {
+        const toolName = msg.toolName || get().activeToolName || 'unknown'
         set((s) => ({
           messages: [...s.messages, {
             id: nextId(),
             type: 'tool_use',
-            toolName: msg.toolName || s.activeToolName || 'unknown',
+            toolName,
             toolUseId: msg.toolUseId || s.activeToolUseId || '',
             input: msg.input,
             timestamp: Date.now(),
@@ -277,7 +286,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           activeThinkingId: null,
           streamingToolInput: '',
         }))
+        // Track task-related tool calls — refresh will happen on tool_result
+        // when the tool has actually finished executing and written to disk
+        if (TASK_TOOL_NAMES.has(toolName)) {
+          const useId = msg.toolUseId || get().activeToolUseId
+          if (useId) pendingTaskToolUseIds.add(useId)
+        }
         break
+      }
 
       case 'tool_result':
         set((s) => ({
@@ -292,6 +308,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           chatState: 'thinking',
           activeThinkingId: null,
         }))
+        // Refresh tasks after a task tool has finished executing
+        if (pendingTaskToolUseIds.has(msg.toolUseId)) {
+          pendingTaskToolUseIds.delete(msg.toolUseId)
+          useCLITaskStore.getState().refreshTasks()
+        }
         break
 
       case 'permission_request':

@@ -4,6 +4,7 @@ import { useChatStore } from '../stores/chatStore'
 import { MessageList } from '../components/chat/MessageList'
 import { ChatInput } from '../components/chat/ChatInput'
 import { TeamStatusBar } from '../components/teams/TeamStatusBar'
+import { SessionTaskBar } from '../components/chat/SessionTaskBar'
 
 export function ActiveSession() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
@@ -78,6 +79,9 @@ export function ActiveSession() {
 
       {/* Message stream */}
       <MessageList />
+
+      {/* Session task bar — sticky at bottom */}
+      <SessionTaskBar />
 
       {/* Team status bar */}
       <TeamStatusBar />

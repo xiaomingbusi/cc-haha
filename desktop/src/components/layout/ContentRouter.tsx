@@ -4,7 +4,6 @@ import { useTeamStore } from '../../stores/teamStore'
 import { EmptySession } from '../../pages/EmptySession'
 import { ActiveSession } from '../../pages/ActiveSession'
 import { ScheduledTasks } from '../../pages/ScheduledTasks'
-import { Tasks } from '../../pages/Tasks'
 import { Settings } from '../../pages/Settings'
 import { AgentTranscript } from '../../pages/AgentTranscript'
 
@@ -19,10 +18,6 @@ export function ContentRouter() {
 
   if (activeView === 'scheduled') {
     return <ScheduledTasks />
-  }
-
-  if (activeView === 'tasks') {
-    return <Tasks />
   }
 
   if (activeView === 'terminal') {
