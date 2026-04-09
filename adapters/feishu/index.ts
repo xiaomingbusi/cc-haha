@@ -333,6 +333,16 @@ async function handleServerMessage(chatId: string, msg: ServerMessage): Promise<
 
     case 'message_complete':
       await buf.complete()
+      // Ensure state is always cleaned up even if buffer was already empty
+      if (state.replyMessageId) {
+        const text = accumulatedText.get(chatId)
+        if (text?.trim()) {
+          await patchMessage(state.replyMessageId, text)
+        }
+        accumulatedText.delete(chatId)
+        chatStates.delete(chatId)
+        buffers.get(chatId)?.reset()
+      }
       break
 
     case 'error':

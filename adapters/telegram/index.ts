@@ -236,6 +236,22 @@ async function handleServerMessage(chatId: string, msg: ServerMessage): Promise<
 
     case 'message_complete':
       await buf.complete()
+      // Ensure placeholder is always cleaned up even if buffer was already empty
+      if (placeholders.has(chatId)) {
+        const text = accumulatedText.get(chatId)
+        if (text?.trim()) {
+          try {
+            const chunks = splitMessage(text, TELEGRAM_TEXT_LIMIT)
+            await bot.api.editMessageText(numericChatId, placeholders.get(chatId)!.messageId, chunks[0]!)
+            for (let i = 1; i < chunks.length; i++) {
+              await bot.api.sendMessage(numericChatId, chunks[i]!)
+            }
+          } catch { /* ignore */ }
+        }
+        placeholders.delete(chatId)
+        accumulatedText.delete(chatId)
+        buffers.get(chatId)?.reset()
+      }
       break
 
     case 'error':
