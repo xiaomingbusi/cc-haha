@@ -229,6 +229,9 @@ html, body, #root {
 button, input, textarea, select, a, [role="button"] {
   -webkit-app-region: no-drag;
 }
+[draggable="true"] {
+  -webkit-app-region: no-drag;
+}
 
 /* Custom shadow from prototype */
 .custom-shadow {

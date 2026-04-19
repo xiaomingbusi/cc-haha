@@ -5,7 +5,6 @@ import { useTranslation } from '../../i18n'
 import { WindowControls, showWindowControls } from './WindowControls'
 
 const TAB_WIDTH = 180
-const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
 
 export function TabBar() {
   const tabs = useTabStore((s) => s.tabs)
@@ -15,8 +14,6 @@ export function TabBar() {
   const disconnectSession = useChatStore((s) => s.disconnectSession)
 
   const moveTab = useTabStore((s) => s.moveTab)
-  const startDraggingRef = useRef<(() => Promise<void>) | null>(null)
-
   const scrollRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -52,16 +49,6 @@ export function TabBar() {
     document.addEventListener('click', close)
     return () => document.removeEventListener('click', close)
   }, [contextMenu])
-
-  useEffect(() => {
-    if (!isTauri) return
-    import(/* @vite-ignore */ '@tauri-apps/api/window')
-      .then(({ getCurrentWindow }) => {
-        const win = getCurrentWindow()
-        startDraggingRef.current = () => win.startDragging()
-      })
-      .catch(() => {})
-  }, [])
 
   const scroll = (direction: 'left' | 'right') => {
     const el = scrollRef.current
@@ -158,19 +145,13 @@ export function TabBar() {
     setDragOverIndex(null)
   }
 
-  const handleTabBarDrag = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button, input, textarea, select, a, [role="button"], [draggable="true"]')) {
-      return
-    }
-    startDraggingRef.current?.()
-  }, [])
-
   if (tabs.length === 0 && !showWindowControls) return null
 
   return (
     <div
+      data-testid="tab-bar"
+      data-tauri-drag-region
       className="flex items-stretch bg-[var(--color-surface-container)] min-h-[37px] select-none border-b border-[var(--color-border)]"
-      onMouseDown={handleTabBarDrag}
     >
 
       {canScrollLeft && (
@@ -203,8 +184,6 @@ export function TabBar() {
         </button>
       )}
 
-      {/* Windows: drag spacer fills remaining area + custom window controls */}
-      {showWindowControls && <div className="flex-1" />}
       <WindowControls />
 
       {contextMenu && (
