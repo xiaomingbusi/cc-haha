@@ -2,6 +2,15 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 
+const startDraggingMock = vi.hoisted(() => vi.fn(() => Promise.resolve()))
+const getCurrentWindowMock = vi.hoisted(() => vi.fn(() => ({
+  startDragging: startDraggingMock,
+})))
+
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: getCurrentWindowMock,
+}))
+
 vi.mock('../../i18n', () => ({
   useTranslation: () => (key: string) => {
     const translations: Record<string, string> = {
@@ -42,6 +51,13 @@ describe('TabBar', () => {
       value: ResizeObserverMock,
     })
 
+    Object.defineProperty(window, '__TAURI__', {
+      configurable: true,
+      value: {},
+    })
+
+    startDraggingMock.mockClear()
+    getCurrentWindowMock.mockClear()
     vi.resetModules()
   })
 
@@ -53,6 +69,8 @@ describe('TabBar', () => {
     useChatStore.setState({
       sessions: {},
     } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__
   })
 
   it('keeps the overflow button flush against window controls on Windows', async () => {
@@ -132,5 +150,68 @@ describe('TabBar', () => {
     })
 
     expect(screen.getByTestId('tab-bar')).toHaveAttribute('data-tauri-drag-region')
+  })
+
+  it('starts dragging when clicking the empty tab-bar gutter', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'Untitled Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-1',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    await waitFor(() => {
+      expect(getCurrentWindowMock).toHaveBeenCalled()
+    })
+
+    const scrollRegion = screen.getByTestId('tab-bar').querySelector('.overflow-x-hidden')
+    expect(scrollRegion).toBeInTheDocument()
+
+    fireEvent.mouseDown(scrollRegion!)
+
+    await waitFor(() => {
+      expect(startDraggingMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not start dragging when clicking a tab', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'Untitled Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-1',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    await waitFor(() => {
+      expect(getCurrentWindowMock).toHaveBeenCalled()
+    })
+
+    fireEvent.mouseDown(screen.getByText('Untitled Session'))
+
+    expect(startDraggingMock).not.toHaveBeenCalled()
   })
 })
